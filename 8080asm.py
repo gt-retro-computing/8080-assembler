@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+import struct
+
 def preprocess_table(table):
 	new_table = {}
 	for k,v in table.iteritems():
@@ -8,6 +10,8 @@ def preprocess_table(table):
 			new_table[k[0]] = {}
 		new_table[k[0]][tuple(k[1:])] = v
 	return new_table
+
+keywords = ['db', 'dw', 'dd', 'dq']
 
 instructionTable = preprocess_table({
     'nop': 0,
@@ -295,85 +299,172 @@ class ASTNode(object):
 	def __repr__(self):
 		return '[%s]<%d>(%s)' % (self.token, self.node_type, self.children)
 
-def lex(asm_in):
-	asm_in += '\n' # HACK; eof is a delimiter
-	delimiters = ' \n\t,;'
-	reserved_names = ['a','b','c','d','e','f','g','h','i','l','m','bc','de','hl','sp']
+class Lexer(object):
+	def __init__(self):
+		self.ptr = 0
+		self.ptr_tok_start = 0
+		self.tokens = []
+		self.aliases = {'dec': 'dcr'}
+		self.token = ''
 
-	STATE_INITIAL, STATE_COMMENT, STATE_DIRECTIVE, STATE_OPERAND, STATE_LABEL = 0, 1, 2, 3, 4
-	appending_states = [STATE_INITIAL, STATE_DIRECTIVE, STATE_OPERAND, STATE_LABEL]
-	state = STATE_INITIAL
-	ptr = 0
-	ptr_tok_start = 0
-	tokens = []
-	aliases = {'dec': 'dcr'}
-	token = ''
-	while ptr < len(asm_in):
-		cur_char = asm_in[ptr]
-		if state == STATE_INITIAL:
-			if cur_char == '.':
-				if token:
-					raise SyntaxError('invalid directive start at %d\n' % (ptr,))
-				state = STATE_DIRECTIVE
-				continue
-			if cur_char == ':':
-				state = STATE_LABEL
-				continue
+	def add_token(self, tok):
+		if tok.text in self.aliases:
+			tok.text = self.aliases[tok.text]
+		# print 'add token ' + repr(tok)
+		self.tokens.append(tok)
 
-		if state == STATE_LABEL:
-			if cur_char == ':':
-				if not token:
-					raise SyntaxError('invalid label name at %d\n' % (ptr,))
+	def add_char(self, c):
+		if not self.token:
+			self.ptr_tok_start = self.ptr
+		self.token += c
 
-		if state == STATE_COMMENT:
-			if cur_char == '\n':
-				state = STATE_INITIAL
-			else:
-				ptr += 1
-			continue
+	def lex(self, asm_in):
+		delimiters = ' \n\t,;'
+		reserved_names = ['a','b','c','d','e','f','g','h','i','l','m','bc','de','hl','sp']
+		STATE_INITIAL, STATE_COMMENT, STATE_DIRECTIVE, STATE_OPERAND, STATE_LABEL, STATE_STRING = 0, 1, 2, 3, 4, 5
+		appending_states = [STATE_INITIAL, STATE_DIRECTIVE, STATE_OPERAND, STATE_LABEL]
 
-		if state in appending_states:
-			if cur_char in delimiters: # end of token
-				if token:
-					if token in aliases: # apply preprocessor
-						token = aliases[token]
-					if state == STATE_DIRECTIVE:
-						if len(token) < 2:
-							raise SyntaxError('invalid directive at %d' % (ptr_tok_start,))
-						tok_type = Token.TYPE_DIRECTIVE
-						state = STATE_OPERAND
-						token = token[1:].lower()
-					elif state == STATE_INITIAL:
-						token = token.lower()
-						if token not in instructionTable and token not in varInstructionTable_SixteenBit and token not in varInstructionTable_EigthBit:
-							raise SyntaxError('invalid instruction %s at %d' % (token, ptr_tok_start))
-						tok_type = Token.TYPE_INSN
-						state = STATE_OPERAND
-					elif state == STATE_OPERAND:
-						tok_type = Token.TYPE_OPERAND
-						state = STATE_OPERAND
-						token = token.lower()
-					elif state == STATE_LABEL:
-						tok_type = Token.TYPE_LABEL
-						state = STATE_INITIAL
-						token = token[:-1].lower()
-						if token in reserved_names:
-							raise SyntaxError('label %s at %d is a reserved name' % (token, ptr_tok_start))
-					tokens.append(Token(token, tok_type, ptr_tok_start))
-					token = ''
-				else:
-					ptr_tok_start = ptr
+		# HACK; eof is a delimiter
+		if not asm_in or asm_in[-1] != '\n':
+			asm_in += '\n'
+
+		self.state = STATE_INITIAL
+		while self.ptr < len(asm_in):
+			cur_char = asm_in[self.ptr]
+			# print '"', cur_char, '"', self.state
+			if self.state == STATE_INITIAL:
+				if cur_char == '.':
+					if self.token:
+						raise SyntaxError('invalid directive at %d\n' % (self.ptr,))
+					self.state = STATE_DIRECTIVE
+					continue
+				
+				if cur_char == ':':
+					self.state = STATE_LABEL
+					continue
+				
 				if cur_char == ';':
-					state = STATE_COMMENT
-				elif cur_char == '\n':
-					state = STATE_INITIAL
-					tokens.append(Token('\n', Token.TYPE_STMT_DELIM, ptr))
-			else:
-				token += cur_char
-			ptr += 1
+					self.state = STATE_COMMENT
+					continue
+				
+				if cur_char in delimiters and self.token:
+					self.token = self.token.lower()
+					if self.token not in instructionTable and self.token not in varInstructionTable_SixteenBit and self.token not in varInstructionTable_EigthBit and self.token not in keywords:
+						raise SyntaxError('invalid instruction %s at %d' % (self.token, self.ptr_tok_start))
+					self.state = STATE_OPERAND
+					self.add_token(Token(self.token, Token.TYPE_INSN, self.ptr_tok_start))
+					self.token = ''
+					continue
 
-	# print tokens
-	return tokens
+				if cur_char == '\n':
+					self.add_token(Token('\n', Token.TYPE_STMT_DELIM, self.ptr))
+					self.ptr += 1
+					self.state = STATE_INITIAL
+					continue
+
+				if cur_char in delimiters:
+					self.ptr += 1
+					continue
+
+				self.add_char(cur_char)
+				self.ptr += 1
+				continue
+
+			if self.state == STATE_COMMENT:
+				if cur_char == '\n':
+					self.add_token(Token('\n', Token.TYPE_STMT_DELIM, self.ptr))
+					self.ptr += 1
+					self.state = STATE_INITIAL
+					continue
+
+				self.ptr += 1
+				continue
+
+			if self.state == STATE_LABEL:
+				assert cur_char == ':'
+				if not self.token:
+					raise SyntaxError('invalid label name at %d\n' % (self.ptr,))
+				self.state = STATE_INITIAL
+				self.token = self.token.lower()
+				if self.token in reserved_names:
+					raise SyntaxError('label %s at %d is a reserved name' % (self.token, self.ptr_tok_start))
+				self.add_token(Token(self.token, Token.TYPE_LABEL, self.ptr_tok_start))
+				self.token = ''
+				self.ptr += 1
+				continue
+
+			if self.state == STATE_OPERAND:
+				if cur_char == "'":
+					if self.token:
+						raise SyntaxError('invalid operand at %d\n' % (self.ptr,))
+					self.ptr += 1
+					self.state = STATE_STRING
+					continue
+				
+				if cur_char == ';':
+					self.state = STATE_COMMENT
+					continue
+				
+				if cur_char in delimiters and self.token:
+					self.state = STATE_OPERAND
+					self.token = self.token.lower()
+					self.add_token(Token(self.token, Token.TYPE_OPERAND, self.ptr_tok_start))
+					self.token = ''
+					continue
+
+				if cur_char == '\n':
+					self.add_token(Token('\n', Token.TYPE_STMT_DELIM, self.ptr))
+					self.ptr += 1
+					self.state = STATE_INITIAL
+					continue
+
+				if cur_char in delimiters:
+					self.ptr += 1
+					continue
+
+				self.add_char(cur_char)
+				self.ptr += 1
+				continue
+
+			if self.state == STATE_DIRECTIVE:
+				if cur_char == ';':
+					self.state = STATE_COMMENT
+					continue
+
+				if cur_char in delimiters and self.token:
+					if len(self.token) < 2:
+						raise SyntaxError('invalid directive at %d' % (self.ptr_tok_start,))
+					self.state = STATE_OPERAND
+					self.token = self.token[1:].lower()
+					self.add_token(Token(self.token, Token.TYPE_DIRECTIVE, self.ptr_tok_start))
+					self.token = ''
+					continue
+
+				if cur_char == '\n':
+					self.add_token(Token('\n', Token.TYPE_STMT_DELIM, self.ptr))
+					self.ptr += 1
+					self.state = STATE_INITIAL
+					continue
+
+				if cur_char in delimiters:
+					self.ptr += 1
+					continue
+
+				self.add_char(cur_char)
+				self.ptr += 1
+				continue
+
+			if self.state == STATE_STRING:
+				if cur_char == "'":
+					self.state = STATE_OPERAND
+					self.ptr += 1
+					continue
+				else:
+					self.add_char(cur_char)
+					self.ptr += 1
+					continue
+
+		return self.tokens
 
 def parse_constant(c):
 	if not c:
@@ -427,13 +518,27 @@ class Codegen(object):
 		self.binary = []
 		self.mappings = {}
 		self.labels = {}
+		self.aliases = {}
 		self.ptr = 0
 
 	def write(self, b):
+		if type(b) == str:
+			for char in b:
+				self.write(ord(char))
+			return
+
 		if len(self.binary) <= self.ptr:
 			self.binary.extend([0] * (self.ptr - len(self.binary) + 1))
 		self.binary[self.ptr] = b
 		self.ptr += 1
+
+	def parse_operand(self, imm_text):
+		if imm_text in self.aliases:
+			imm_text = self.aliases[imm_text]
+		if imm_text in self.labels:
+			return self.labels[imm_text]
+		else:
+			return parse_constant(imm_text)
 
 	def generate(self):
 		for astnode in ast.children:
@@ -445,37 +550,56 @@ class Codegen(object):
 				dirname = astnode.token.text
 				if dirname == 'org':
 					if len(astnode.children) != 1:
-						raise SyntaxError('wrong argument count for directive %s at %d' % (dirname, astnode.token.source_self.ptr))
+						raise SyntaxError('wrong argument count for directive %s at %d' % (dirname, astnode.token.source_ptr))
 					org_val = parse_constant(astnode.children[0].text)
 					# print 'org %d' % (org_val,)
 					self.ptr = org_val
+				if dirname == 'equ':
+					if len(astnode.children) != 2:
+						raise SyntaxError('wrong argument count for directive %s at %d' % (dirname, astnode.token.source_ptr))
+					self.aliases[astnode.children[0].text] = astnode.children[1].text
+				if dirname == 'ascii':
+					if len(astnode.children) != 1:
+						raise SyntaxError('wrong argument count for directive %s at %d' % (dirname, astnode.token.source_ptr))
+					text = astnode.children[0].text
+					self.write(text)
 			elif astnode.node_type == ASTNode.TYPE_INSN:
 				opcode = astnode.token.text
+				if opcode in keywords:
+					if opcode == 'db' or opcode == 'dw' or opcode == 'dd' or opcode == 'dq':
+						if len(astnode.children) != 1:
+							raise SyntaxError('wrong argument count for %s at %d' % (opcode, astnode.token.source_ptr))
+						imm = self.parse_operand(astnode.children[-1].text)
+						if opcode == 'db':
+							self.write(struct.pack('<B', imm))
+						elif opcode == 'dw':
+							self.write(struct.pack('<H', imm))
+						elif opcode == 'dd':
+							self.write(struct.pack('<I', imm))
+						elif opcode == 'dq':
+							self.write(struct.pack('<Q', imm))
 				if opcode in instructionTable:
 					operands = tuple(map(lambda tok: tok.text, astnode.children))
 					if not operands in instructionTable[opcode]:
-						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_self.ptr))
+						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_ptr))
 					self.write(instructionTable[opcode][operands])
 				if opcode in varInstructionTable_EigthBit:
 					operands = tuple(map(lambda tok: tok.text, astnode.children[:-1]))
 					if not operands in varInstructionTable_EigthBit[opcode]:
-						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_self.ptr))
+						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_ptr))
 					self.write(varInstructionTable_EigthBit[opcode][operands])
 					imm_text = astnode.children[-1].text
-					imm8 = parse_constant(imm_text)
+					imm8 = self.parse_operand(imm_text)
 					if imm8 > 0xFF or imm8 < 0:
 						raise SyntaxError('invalid immediate %s at %d (%d not in 0-255)' % (imm_text, astnode.token.source, imm8))
 					self.write(imm8)
 				if opcode in varInstructionTable_SixteenBit:
 					operands = tuple(map(lambda tok: tok.text, astnode.children[:-1]))
 					if not operands in varInstructionTable_SixteenBit[opcode]:
-						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_self.ptr))
+						raise SyntaxError('invalid operands %s for instruction %s at %d' % (operands, opcode, astnode.token.source_ptr))
 					self.write(varInstructionTable_SixteenBit[opcode][operands])
 					imm_text = astnode.children[-1].text
-					if imm_text in self.labels:
-						imm16 = self.labels[imm_text]
-					else:
-						imm16 = parse_constant(imm_text)
+					imm16 = self.parse_operand(imm_text)
 					if imm16 > 0xFFFF or imm16 < 0:
 						raise SyntaxError('invalid immediate %s at %d (%d not in 0-65535)' % (imm_text, astnode.token.source, imm16))
 					self.write(imm16 & 0xFF) # low byte
@@ -488,7 +612,8 @@ import sys
 asm_in = open('fib.s','r').read()
 # asm_in = sys.stdin.read()
 
-tokens = lex(asm_in)
+tokens = Lexer().lex(asm_in)
+# print tokens
 ast = parse(tokens)
 # print ast
 binary = Codegen(ast).generate()

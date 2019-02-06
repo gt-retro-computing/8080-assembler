@@ -1,5 +1,6 @@
 ;fib
 .org 0
+.equ DELAY_TIME 0FFFFh
 
 init:
     mvi a, 0
@@ -14,7 +15,7 @@ fib:
     xra l
     mov b, c
     mov h, a
-    LXI d, 0FFFFh
+    LXI d, DELAY_TIME
 delay:
     dcx d
     mov a, d
@@ -22,3 +23,8 @@ delay:
     jnz delay
     mov a, h
     jmp fib
+
+db 0xde
+dw beadh
+dd efh
+.ascii 'dank memes'
