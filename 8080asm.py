@@ -607,10 +607,50 @@ class Codegen(object):
 
 		return self.binary
 
+
+class IntelHexEncoder:
+    def __init__(self, binary):
+        self.binary = binary
+
+    def _gethex(self, num):
+        a = hex(num)[2:]
+        while len(a) < 2:
+            a = '0' + a
+        return a
+    
+    def _chunkify(self):
+        chunks = []
+        i = 0
+        while i < len(self.binary):
+            chunks.append(self.binary[i:i+255])
+            i += 255
+        return chunks
+    
+    def _encode_chunk(self, chunk, addr=0):
+        intel_hex = ':' + self._gethex(len(binary)) + self._gethex(addr / 256) + self._gethex(addr % 256) + '00'
+        checksum = 0
+
+        for b in binary:
+            intel_hex += self._gethex(b)
+            checksum = (checksum + b) % 256
+
+        checksum = (256 - checksum) % 256
+        intel_hex += self._gethex(checksum)
+
+        return intel_hex.upper()
+    
+    def encode(self, addr=0):
+        chunks = []
+        for bin_chunk in self._chunkify():
+            chunks.append(self._encode_chunk(bin_chunk, addr=addr))
+            addr += 255
+
+        return chunks
+
+
 import sys
 
-asm_in = open('fib.s','r').read()
-# asm_in = sys.stdin.read()
+asm_in = open(sys.argv[1], 'r').read()
 
 tokens = Lexer().lex(asm_in)
 # print tokens
@@ -618,13 +658,19 @@ ast = parse(tokens)
 # print ast
 binary = Codegen(ast).generate()
 
-output = '{ '
-for b in binary:
-	output += '0x%02x, ' % (b,)
-output += '};'
-print output
+chunks = IntelHexEncoder(binary).encode()
 
-bin_out = ''.join(map(chr, binary))
-print bin_out.encode('hex')
-with open('rom.bin', 'wb') as f:
-	f.write(bin_out)
+for chunk in chunks:
+    print chunk
+
+
+# output = '{ '
+# for b in binary:
+#  	output += '0x%02x, ' % (b,)
+# output += '};'
+# print output
+
+# bin_out = ''.join(map(chr, binary))
+# print bin_out.encode('hex')
+# with open('rom.bin', 'wb') as f:
+# 	f.write(bin_out)
