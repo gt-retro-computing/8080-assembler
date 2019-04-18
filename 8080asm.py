@@ -57,20 +57,25 @@ instructionTable = preprocess_table({
     'inr a': 60,
     'dcr a': 61,
     'push b': 197,
+    'push be': 197,
     'rst 0': 199,
     'rz': 200,
     'ret': 201,
     'rst 1': 207,
     'rnc': 208,
     'pop d': 209,
+    'pop de': 209,
     'push d': 213,
+    'push de': 213,
     'rst 2': 215,
     'rc': 216,
     'rst 3': 223,
     'rpo': 224,
     'pop h': 225,
+    'pop hl': 225,
     'xthl': 227,
     'push h': 229,
+    'push hl': 229,
     'rst 4': 231,
     'rpe': 232,
     'pchl': 233,
@@ -216,6 +221,7 @@ instructionTable = preprocess_table({
     'cmp a': 191,
     'rnz': 192,
     'pop b': 193,
+    'pop be': 193,
 })
 
 # Instruction table dictionary that expects a secondary parameter (8-bit)
@@ -244,8 +250,11 @@ varInstructionTable_EigthBit = preprocess_table({
 # Instruction table dictionary that expects a secondary parameter (16-bit)
 varInstructionTable_SixteenBit = preprocess_table({
     'lxi b,': 1,
+    'lix bc,': 1,
     'lxi d,': 17,
+    'lxi de,': 17,
     'lxi h,': 33,
+    'lxi hl,': 33,
     'shld': 34,
     'lhld': 42,
     'lxi sp,': 49,
@@ -546,7 +555,8 @@ class Codegen(object):
 				labelname = astnode.token.text
 				# print '%s at %d' % (labelname, self.ptr)
 				self.labels[labelname] = self.ptr
-			elif astnode.node_type == ASTNode.TYPE_DIRECTIVE:
+		for astnode in ast.children:
+			if astnode.node_type == ASTNode.TYPE_DIRECTIVE:
 				dirname = astnode.token.text
 				if dirname == 'org':
 					if len(astnode.children) != 1:
@@ -622,13 +632,13 @@ class IntelHexEncoder:
         chunks = []
         i = 0
         while i < len(self.binary):
-            chunks.append(self.binary[i:i+255])
-            i += 255
+            chunks.append(self.binary[i:i+32])
+            i += 32
         return chunks
     
     def _encode_chunk(self, chunk, addr=0):
         intel_hex = ':' + self._gethex(len(binary)) + self._gethex(addr / 256) + self._gethex(addr % 256) + '00'
-        checksum = 0
+        checksum = (len(binary) + int(addr / 256) + addr % 256) % 256
 
         for b in binary:
             intel_hex += self._gethex(b)
@@ -662,6 +672,26 @@ chunks = IntelHexEncoder(binary).encode()
 
 for chunk in chunks:
     print chunk
+
+
+import serial
+import glob
+import time
+
+# mac_irl
+serial_ifs = glob.glob('/dev/cu.usbserial*')
+
+if not serial_ifs:
+    print 'No serial interfaces found!'
+    exit(1)
+
+print 'Using serial:', serial_ifs[0]
+
+with serial.Serial(serial_ifs[0], 115200, timeout=0.05) as ser:
+    for chunk in chunks:
+        ser.write(chunk)
+        ser.write('\r\n')
+        print ser.read(size=300)
 
 
 # output = '{ '
