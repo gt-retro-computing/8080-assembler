@@ -17,8 +17,9 @@ DDATA .equ 0fbh
 DSTAT .equ 0f8h
 DSECT .equ 0fah
 
-DISK_BUF    .equ 0x400
-SERIAL_BUF  .equ 0x500
+DISK_BUF        .equ 0x400
+DISK_BUF_END    .equ 0x480
+SERIAL_BUF      .equ 0x500
 
 
 .org 0
@@ -31,6 +32,14 @@ start:
 
     lxi hl, TEXT_WELCOME
     call swrite_line
+
+    jmp loop2
+
+foo_loop:
+    call sread_line
+    lxi hl, SERIAL_BUF
+    call swrite_line
+    jmp foo_loop
 
     hlt
 
@@ -78,8 +87,12 @@ wr_loop:
     hlt
 loop2:
 
-    mvi a, 0x65
-    out 0
+    mvi e, 255 ; track num
+
+outer_foo:
+    inr e
+    mov a, e
+    call dseek
    
     mvi d, 0
 foo:
@@ -88,11 +101,21 @@ foo:
     call dsector_read
     in DSTAT
     ani 0x10
-    jz foo
-
+    jnz foo_end
+    
+    lxi hl, DISK_BUF
+    mvi a, 128
+    call swrite_bytes
+    
+    jmp foo
+foo_end:
     mov a, d
     cma
     out 0xff
+
+    mov a, e
+    cpi 76   ; last track 
+    jnz outer_foo
     
     hlt
 
@@ -145,6 +168,28 @@ swrite_byte_wait:
     pop de
     ret
 
+; Write bytes to serial
+; A = num bytes
+; HL = address of bytes
+;
+swrite_bytes:
+    push de
+    mov d, a            ; bytes left counter
+
+swrite_bytes_loop:
+    mov a, d
+    ora a
+    jz swrite_bytes_end ; zero bytes left, exit
+    dcr d
+    mov a, m
+    inx hl
+    call swrite_byte
+    jmp swrite_bytes_loop
+
+swrite_bytes_end:
+    pop de
+    ret
+
 
 ; Write null-terminated string to serial
 ; HL = address of string
@@ -166,6 +211,28 @@ swrite_line:
     call swrite_str
     lxi hl, TEXT_ENDL
     call swrite_str
+    ret
+
+
+; Read a line from serial. Line end indicated by LF (\n) which is stripped.
+; Result is null-terminated string in SERIAL_BUF
+; 
+sread_line:
+    push hl
+    lxi hl, SERIAL_BUF
+sread_line_loop:    
+    call sread_byte
+    cpi LF
+    jz sread_line_end
+    cpi 0
+    jz sread_line_end
+    mov m, a
+    inx hl    
+    jmp sread_line_loop
+sread_line_end:
+    mvi a, 0
+    mov m, a
+    pop hl
     ret
 
 
