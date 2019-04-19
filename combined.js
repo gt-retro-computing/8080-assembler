@@ -1938,7 +1938,7 @@ asmCall({command: 'assemble', src: sourceCode}, function(result) {
 
         console.log('== Starting address: 0x' + Number(startAddr).toString(16) + ' ==');
 
-        for (var i = 0; i < result.mem.length; i++) {
+        /*        for (var i = 0; i < result.mem.length; i++) {
             var addr = startAddr + i;
 
             var line = paddedBinary( Math.floor(addr / 256)) + ' ' + paddedBinary(addr % 256);
@@ -1950,25 +1950,18 @@ asmCall({command: 'assemble', src: sourceCode}, function(result) {
 
             console.log(line);
 
-        }
+        }*/
 
-        if (result.mem.length < 256) {
-            console.log("C Array:");
+        console.log("Intel HEX:");
 
-            var cArr = "uint8_t data[] = {";
-
-            for (var i = 0; i < result.mem.length; i++) {
-                if (i > 0) {
-                    cArr += ", ";
-                }
-                cArr += "0x" + gethex(result.mem[i]);
-            }
-
-            cArr += '};';
-            console.log(cArr);
-            console.log('');
-            
-            console.log("Intel HEX:");
+        var blockSize = 128;
+        var numBlocks = Math.ceil(result.mem.length / blockSize);
+    
+        
+        for (var blockI = 0; blockI < numBlocks; blockI++) {
+            var blockOffset = blockI * blockSize;
+            var blockLength = Math.min(result.mem.length - blockOffset, blockSize);
+            var blockStartAddr = startAddr + blockOffset;
 
             function gethex(num) {
                 var a = Number(num).toString(16);
@@ -1976,12 +1969,12 @@ asmCall({command: 'assemble', src: sourceCode}, function(result) {
                 return a.toUpperCase();
             }
         
-            var ihex = ':' + gethex(result.mem.length) + gethex(Math.floor(startAddr / 256)) + gethex(startAddr % 256) + '00';
-            var checksum = (result.mem.length + Math.floor(startAddr / 256) + (startAddr % 256) ) % 256;
+            var ihex = ':' + gethex(blockLength) + gethex(Math.floor(blockStartAddr / 256)) + gethex(blockStartAddr % 256) + '00';
+            var checksum = (blockLength + Math.floor(blockStartAddr / 256) + (blockStartAddr % 256) ) % 256;
 
-            for (var i = 0; i < result.mem.length; i++) {
-                ihex += gethex(result.mem[i]);
-                checksum = (checksum + result.mem[i]) % 256;
+            for (var i = 0; i < blockLength; i++) {
+                ihex += gethex(result.mem[blockOffset + i]);
+                checksum = (checksum + result.mem[blockOffset + i]) % 256;
             }
         
             checksum = -checksum;
@@ -1991,8 +1984,6 @@ asmCall({command: 'assemble', src: sourceCode}, function(result) {
 
             ihex += gethex(checksum);
             console.log(ihex);
-        } else {
-            console.log('skipping intel  hex gen');
         }
 
     });

@@ -20,11 +20,12 @@ if not serial_ifs:
 
 print 'Using serial:', serial_ifs[0]
 
-with serial.Serial(serial_ifs[0], 115200, timeout=0.05) as ser:
+with serial.Serial(serial_ifs[0], 115200, timeout=0.1) as ser:
+    print 'Serial Name:', ser.name
     for chunk in hexes:
         ser.write(chunk)
         ser.write('\r\n')
-        print ser.read(size=300)
+        print ser.read(size=10000)
 
 
 
