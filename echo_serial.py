@@ -12,7 +12,8 @@ with open(sys.argv[1]) as f:
 
 
 # mac_irl
-serial_ifs = glob.glob('/dev/cu.usbserial*')
+#serial_ifs = glob.glob('/dev/cu.usbserial*')
+serial_ifs = glob.glob('/dev/ttyUSB0')
 
 if not serial_ifs:
     print 'No serial interfaces found!'

@@ -1,6 +1,6 @@
 ;fib
 .org 0
-.equ DELAY_TIME 0FFFFh
+ DELAY_TIME equ 0FFFFh
 
 init:
     mvi a, 0
@@ -24,7 +24,3 @@ delay:
     mov a, h
     jmp fib
 
-db 0xde
-dw beadh
-dd efh
-.ascii 'dank memes'

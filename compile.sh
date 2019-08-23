@@ -8,6 +8,6 @@ if [ ! $? -eq 0 ]; then
     exit 1
 fi
 
-python echo_serial.py "$hex_data"
+python2 echo_serial.py "$hex_data"
 
 

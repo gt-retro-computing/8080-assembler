@@ -3,6 +3,12 @@
 function importScripts() {
 }
 
+
+function atob(str) {
+  return Buffer.from(str, 'base64').toString('binary');
+}
+
+
 var self = {};
 
 self.addEventListener = function(name, func) {
