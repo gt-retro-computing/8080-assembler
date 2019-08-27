@@ -17,7 +17,9 @@ out DCOM
 ;check for DRQ
 loop:
 IN DWAIT
-LXI H, 0xFF01
+
+LXI H, 0xFFB8 ; really bad hardcoded, addr for -diskData2 (2 complement)
+
 DAD B
 jc loop2_b
 
@@ -49,8 +51,9 @@ LXI b, diskData1
 mov a, d
 cpi 0x4c
 jz end
-inr d
-mov a, d
+inr a
+mov d, a
+cma
 out 0xff
 mvi a, 0b01011100
 out DCOM
