@@ -66,7 +66,7 @@ DSECT .equ 0fah
 ''')
 
 
-with Loop('d', 0, 20, 'Track Counter'):
+with Loop('d', 0, 0x4d, 'Track Counter'):
     print('\tmvi a, 0xf4')
     print('\tout DCOM')
 
@@ -115,6 +115,11 @@ with Loop('d', 0, 20, 'Track Counter'):
     print('\tout DDATA')
     print('\tjmp {}'.format(end_seq_begin_label))
     print('{}:'.format(end_seq_end_label))
+    print('''
+        mvi a, 0b01011100
+        out DCOM
+        IN DWAIT
+    ''')
     # ---
 
 print('\thlt')

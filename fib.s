@@ -1,6 +1,6 @@
 ;fib
 .org 0
- DELAY_TIME equ 0FFFFh
+ DELAY_TIME equ 0Fh
 
 init:
     mvi a, 0
