@@ -1,45 +1,109 @@
-import base64
+global_label = 1
 
-a = bytearray()
-b = bytearray()
 
-for i in range(40):
-    a.append(0x00)
-for i in range(6):
-    a.append(0x0)
+def next_label(prefix):
+    global global_label
 
-a.append(0xFC) # Index Mark
+    label = global_label
+    global_label += 1
+    lbl = ''
+    while label != 0:
+        lbl += 'abcdefghijklmnopqrstuvwxyz'[label % 26]
+        label = label // 26
 
-for i in range(26):
-    a.append(0x00)
+    return prefix + '_' + lbl
 
-for i in range(26):
-    for j in range(6):
-        a.append(0)
-    a.append(0xFE)
-    # a.append(0)
-    b.append(0)
-    b.append(i+1)
-    b.append(0x0)
-    b.append(0xF7)
-    for j in range(11):
-        b.append(0x00)
-    for j in range(6):
-        b.append(0)
-    b.append(0xFB)
-    for j in range(128):
-        b.append(0x69)
-    b.append(0xF7)
-    for i in range(27):
-        b.append(0x00)
-for i in range(300):
-    b.append(0x00)
 
-print(base64.standard_b64encode(a))
-print(base64.standard_b64encode(b))
+class Loop:
+    def __init__(self, var, start, end, dbg=''):
+        self.var = var
+        self.start = start
+        self.end = end
+        self.dbg = dbg
+        self.loop_label = None
 
-print(len(a))
-c = a
-a.append(0)
-a += b
-print(base64.standard_b64encode(c))
+    def __enter__(self):
+        self.loop_label = next_label('loop')
+        print('\tmvi {}, {}'.format(self.var, self.start))
+        print('{}_begin:'.format(self.loop_label))
+
+        print('\tmvi a, {}'.format(self.end))
+        print('\tcmp {}'.format(self.var))
+        print('\tjz {}_end'.format(self.loop_label))
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        print('\tinr {}'.format(self.var))
+        print('\tjmp {}_begin'.format(self.loop_label))
+        print('{}_end:'.format(self.loop_label))
+
+
+def out(data):
+    print('\tin DWAIT')
+    if type(data) == str:
+        print('\tmov a, {}'.format(data))
+    else:
+        print('\tmvi a, {}'.format(data))
+    print('\tout DDATA')
+
+
+print('''
+DWAIT .equ 0fch
+DCOM .equ 0f8h
+DDATA .equ 0fbh
+DSTAT .equ 0f8h
+DSECT .equ 0fah
+''')
+
+print('\tmvi a, 0xf4')
+print('\tout DCOM')
+
+with Loop('b', 0, 46):
+    out(0x00)
+
+out(0xfc)
+
+with Loop('b', 0, 26):
+    out(0x00)
+
+with Loop('b', 1, 27):
+    with Loop('c', 0, 6):
+        out(0x00)
+
+    out(0xfe)
+    out(0)  # track number
+
+    out(0)
+    out('b')
+    out(0)
+    out(0xF7)
+
+    with Loop('c', 0, 17):
+        out(0x00)
+
+    out(0xFB)
+
+    with Loop('c', 0, 128):
+        out(0xE5)
+
+    out(0xF7)
+
+    with Loop('c', 0, 27):
+        out(0x00)
+
+print('end_lbl:')
+print('\tin DWAIT')
+print('\tora a')
+print('\tjp end')
+print('\tmvi a, 0')
+print('\tout DDATA')
+print('\tjmp end_lbl')
+
+print('end:')
+print('\thlt')
+
+with Loop('b', 0, 10):
+    print('foo')
+
+
+import sys
+print(sys.platform)
