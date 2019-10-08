@@ -1957,17 +1957,23 @@ asmCall({command: 'assemble', src: sourceCode}, function(result) {
             console.log(line);
 
         }*/
-
+        
+        /*        for (var i = 0; i < startAddr; i++) {
+            result.mem[i] = 0x76;
+        }
+        startAddr = 0;
+        */
         console.log("Intel HEX:");
 
         var blockSize = 128;
-        var numBlocks = Math.ceil(result.mem.length / blockSize);
+        var totalLength = result.mem.length - startAddr;
+        var numBlocks = Math.ceil(totalLength / blockSize);
     
         
         for (var blockI = 0; blockI < numBlocks; blockI++) {
-            var blockOffset = blockI * blockSize;
+            var blockOffset = startAddr + blockI * blockSize;
             var blockLength = Math.min(result.mem.length - blockOffset, blockSize);
-            var blockStartAddr = startAddr + blockOffset;
+            var blockStartAddr = blockOffset;
 
             function gethex(num) {
                 var a = Number(num).toString(16);
