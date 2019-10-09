@@ -16,7 +16,7 @@ DCOM .equ 0f8h
 DDATA .equ 0fbh
 DSTAT .equ 0f8h
 DSECT .equ 0fah
-
+DEXT .equ 0fch
 
 MEM .equ 24
 CPM_BASE .equ (MEM-7)*1024
@@ -41,7 +41,7 @@ bios_entry:
     jmp b_setsec   ; +33 - setsector
     jmp b_setdma   ; +36 - setdma
     jmp b_read   ; +39 - read
-    jmp b_noop   ; +42 - write
+    jmp b_write   ; +42 - write
     jmp b_noop   ; +45 - list status
     jmp b_sect_translate   ; +48 - sect translate
 
@@ -89,7 +89,7 @@ dpblk:  ;disk parameter block, common to all disks
     db  192     ;alloc 0
     db  0       ;alloc 1
     dw  16      ;check size
-    dw  2       ;track offset
+    dw  2       ;track offset   2=for cpm disk
 
 
 b_setup:
@@ -102,15 +102,6 @@ b_setup:
     SHLD 6      ;AT ADR 5,6,7.
     ; LXI  H,80H  ;SET DEFAULT DMA ADR.
     ; SHLD DMAADD
-    RET
-
-
-b_boot:
-    LXI  SP,STACK_TOP   
-    
-    xra a
-    sta IOBYTE
-    sta CDISK
 
     ; init serial
     mvi a,0
@@ -124,6 +115,16 @@ b_boot:
     out TTS
     mvi a, 037h
     out TTS
+
+    RET
+
+
+b_boot:
+    LXI  SP,STACK_TOP   
+    
+    xra a
+    sta IOBYTE
+    sta CDISK
 
     call b_setup
 
@@ -146,7 +147,7 @@ gocpm:
     jmp CPM_BASE
 
 b_wboot:
-    LXI  SP,80H
+    LXI  SP,STACK_TOP
     
     CALL b_setup
     JMP  gocpm
@@ -228,11 +229,29 @@ b_seldsk:
     lxi h,0000h ;error return code
     mov a,c
     sta diskno
-    cpi 4   ;must be between 0 and 3
-    rnc     ;no carry if 4,5,...
-;   disk number is in the proper range
-    ds  10  ;space for disk select
-;   compute proper disk parameter header address
+    
+jmp foobar
+    ; cma 
+    ; out 0xFF
+    ; cma
+    
+    ; return now if out of range
+    cpi 2
+    rnc
+    
+    inr a
+    cma
+    ani 3
+    ral
+    ral
+    ral
+    ral
+    ori 2
+    out DEXT
+
+foobar:
+    mov a, c
+
     lda diskno
     mov l,a ;L=disk number 0,1,2,3
     mvi h,0 ;high order zero
@@ -254,9 +273,9 @@ b_settrk:
     mov a, c
     sta track
     
-    cma
-    out 0xFF
-    cma
+    ; cma
+    ; out 0xFF
+    ; cma
     
     out DDATA
 b_settrk_busy:
@@ -286,6 +305,7 @@ dsector_read:
     mov h, a
 
     lda sector
+    inr a
     ; cma
     ; out 0xFF
     ; cma
@@ -302,13 +322,13 @@ dsector_read_loop:
     inx hl
     jmp dsector_read_loop
 dsector_read_done:
+    
+    in DSTAT
+    cma
+    out 0xFF
+    cma    
 
-    ; cma
-    ; out 0xFF
-    ; cma    
-
-    ani 0x10
-    ora a 
+    ani 0x90
     jnz b_read_err
 
     pop hl
@@ -319,6 +339,47 @@ b_read_err:
     pop hl
     mvi a, 1
     ret
+
+b_write:
+    lda dmaad
+    mov l, a
+    lda dmaad+1
+    mov h, a
+
+    lda sector
+    inr a
+    ; cma
+    ; out 0xFF
+    ; cma
+
+; Write a sector of disk
+; A  = sector number
+; HL = address of data to copy to disk
+
+dsector_write:
+    out DSECT
+    mvi a, 0adh
+    out DCOM
+dsector_write_loop:
+    in DWAIT
+    ora a
+    jp dsector_write_done
+    mov a, m
+    out DDATA
+    inx hl
+    jmp dsector_write_loop
+dsector_write_done:
+
+    ; in DSTAT
+    ; cma
+    ; out 0xFF
+    
+    xra a
+    ; mov a, l
+    ; cma
+    ; out 0xff
+    ret
+
 
 
 b_sect_translate:

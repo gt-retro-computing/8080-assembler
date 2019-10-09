@@ -1,5 +1,5 @@
 ;fib
-.org 0
+.org 0x100
  DELAY_TIME equ 0Fh
 
 init:
