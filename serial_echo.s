@@ -38,7 +38,8 @@ init:
     out TTS
     mvi a,040h
     out TTS
-    mvi a,04eh  ; 8,1,n
+    ; mvi a,04eh  ; 8,1,n
+    mvi a, 7eh
     out TTS
     mvi a,037h
     out TTS

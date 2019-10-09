@@ -111,7 +111,7 @@ b_setup:
     mvi a, 040h
     out TTS
     ; mvi a, 04eh
-    mvi a, 04ah  ; 8,1,n
+    mvi a, 7eh  ; 8,1,e
     out TTS
     mvi a, 037h
     out TTS
@@ -156,6 +156,9 @@ b_wboot:
 b_const:
     ; jmp $
     in TTS
+    cma
+    out 0xFF
+    cma
     ani TTYDA
     jz b_const_nodata
     mvi a, 0xFF
@@ -230,16 +233,13 @@ b_seldsk:
     mov a,c
     sta diskno
     
-jmp foobar
-    ; cma 
-    ; out 0xFF
-    ; cma
-    
     ; return now if out of range
     cpi 2
     rnc
-    
-    inr a
+
+    ; jmp foobar
+    ; mvi a, 3
+    ; inr a
     cma
     ani 3
     ral
@@ -247,7 +247,12 @@ jmp foobar
     ral
     ral
     ori 2
-    out DEXT
+
+    cma
+    out 0xFF
+    cma
+
+    sta disklatch
 
 foobar:
     mov a, c
@@ -261,6 +266,8 @@ foobar:
     dad h   ;*16 (size of each header)
     lxi d,dpbase
     dad d   ;HL=.dpbase(diskno*16)
+
+    xra a
     ret    
 
 b_setsec: ;set sector given by register c
@@ -273,6 +280,32 @@ b_settrk:
     mov a, c
     sta track
     
+    lda disklatch
+    out DEXT
+    
+    mvi a, 0d0h
+b_settrk_busyl:
+    dcr a
+    inr a
+    dcr a
+    inr a
+    dcr a
+    inr a
+    dcr a
+    jnz b_settrk_busyl
+    
+b_settrk_s:
+    in DSTAT
+    rrc
+    jc b_settrk_s
+
+    ; mvi a, 0x12
+    ; out DCOM
+    ; in DWAIT
+    
+
+    lda track
+    
     ; cma
     ; out 0xFF
     ; cma
@@ -284,7 +317,24 @@ b_settrk_busy:
     jc b_settrk_busy
     mvi a, 12h
     out DCOM
-    in DWAIT
+    ; in DWAIT
+
+b_s:
+    in DSTAT
+    cma
+    out 0xFF
+    cma
+    rrc
+    jc b_s
+
+
+    in DSTAT
+    ani 0x91
+    jz b_settrk_end
+
+
+b_settrk_end:
+    xra a
     ret
 
 
@@ -417,6 +467,7 @@ track:  ds  2   ;two bytes for expansion
 sector: ds  2   ;two bytes for expansion
 dmaad:  ds  2   ;direct memory address
 diskno: ds  1   ;disk number 0-15
+disklatch: ds 1
 ;
 ;   scratch ram area for BDOS use
 begdat  equ $   ;beginning of data area
