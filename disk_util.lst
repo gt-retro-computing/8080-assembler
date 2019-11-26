@@ -34,7 +34,7 @@ start:
     lxi H, TEXT_WELCOME
     call swrite_line
     ; select drive
-    mvi a, 1
+    mvi a, 2
     cma
     ani 3
     ral
@@ -43,27 +43,7 @@ start:
     ral
     ori 2
     out DEXT
-start_wait:
-    in DSTAT
-    ani 0x81
-    jnz start_wait
-    mvi a, 0xd4
-    out DCOM
-start_wait2:
-    in DSTAT
-    ani 0x81
-    jnz start_wait2
     ; done
-    this:
-    in DSTAT
-    cma
-    out 0xFF
-    cma
-    ani 0x81
-    jnz this
-    mvi a, 0x72
-    out DCOM
-    jmp this
     jmp loop2
 
 foo_loop:
@@ -286,11 +266,7 @@ dseek:
     cmp d
     jp dseek_end
     out DDATA
-dseek_busy:
-    IN DSTAT
-    RRC
-    JC dseek_busy
-    mvi a, 12h
+    mvi a, 013h
     out DCOM
 dseek_end:
     pop D
@@ -370,3 +346,7 @@ TEXT_LOC:
 
 
 
+
+
+total time: 0.0033 sec.
+no errors

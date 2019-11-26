@@ -111,7 +111,7 @@ b_setup:
     mvi a, 040h
     out TTS
     ; mvi a, 04eh
-    mvi a, 04ah  ; 8,1,n
+    mvi a, 07eh  ; 8,1,n
     out TTS
     mvi a, 037h
     out TTS
@@ -200,6 +200,7 @@ b_home:
 b_home_1:
     in DSTAT
     rrc
+    ora a
     jc b_home_1
     mvi a, 3
     out DCOM
@@ -281,6 +282,7 @@ b_settrk:
 b_settrk_busy:
     in DSTAT
     rrc
+    ora a
     jc b_settrk_busy
     mvi a, 12h
     out DCOM
@@ -329,10 +331,10 @@ dsector_read_done:
     cma    
 
     ani 0x90
+    mvi a, 0
     jnz b_read_err
 
     pop hl
-    mvi a, 0 
     ret
 
 b_read_err:
